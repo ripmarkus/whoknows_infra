@@ -9,8 +9,7 @@ on:
 
 env:
   TF_VAR_hcloud_token: ${{ secrets.HCLOUD_TOKEN }}
-  AWS_ACCESS_KEY_ID: ${{ secrets.TF_BACKEND_ACCESS_KEY }}
-  AWS_SECRET_ACCESS_KEY: ${{ secrets.TF_BACKEND_SECRET_KEY }}
+  TF_TOKEN_app_terraform_io: ${{ secrets.TF_CLOUD_TOKEN }}
 
 jobs:
   plan:
