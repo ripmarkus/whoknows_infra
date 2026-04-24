@@ -4,21 +4,21 @@
 
 set -euo pipefail
 
-# input validation, 4 arguments exactly or exit with a non-zero code
+# accept inputs from env vars with positional arg fallbacks
 
-read -p "Image: " IMAGE
-read -p "App name: " NAME
-read -p "Domain: " DOMAIN
-read -p "Port [80]: " PORT
-PORT=${PORT:-80}
+IMAGE="${IMAGE:-${1:-}}"
+NAME="${NAME:-${2:-}}"
+DOMAIN="${DOMAIN:-${3:-}}"
+PORT="${PORT:-${4:-80}}"
+
 if [[ -z "$IMAGE" || -z "$NAME" || -z "$DOMAIN" ]]; then
-  echo "Error: all fields are required"
+  echo "Error: all fields are required (IMAGE, NAME, DOMAIN)"
   exit 1
 fi
 
 # check for kubectl and talosctl installation, before it is used
 
-for cmd in talosctl kubectl; do
+for cmd in talosctl kubectl terraform; do
     if ! command -v "$cmd" &>/dev/null; then
         echo "Error: $cmd is not installed or not in PATH"
         exit 1
@@ -27,25 +27,27 @@ done
 
 # dont expect a kubeconfig file to exist on disk, this reads the loadbalancer IP from terraform outputs.
 
-TERRAFORM_DIR="$(pwd)/terraform/hetzner"
+TERRAFORM_DIR="$(cd "$(dirname "$0")/.." && pwd)/terraform"
 
-if [[ ! -f "$TERRAFORM_DIR/terraform.tfstate" ]]; then
-    echo "Error: Terraform state not found. Run 'terraform apply' in terraform/hetzner/ first."
-    exit 1
+LOADBALANCER_IP=$(terraform -chdir="$TERRAFORM_DIR" output -raw load_balancer_ip)
+
+# resolve talosconfig: decode from env var or fall back to local file
+
+if [[ -n "${TALOSCONFIG_B64:-}" ]]; then
+  echo "$TALOSCONFIG_B64" | base64 -d > /tmp/talosconfig
+  TALOSCONFIG="/tmp/talosconfig"
+else
+  TALOSCONFIG="$(cd "$(dirname "$0")/.." && pwd)/talos/talosconfig"
 fi
 
-LOADBALANCER_IP=$(terraform -chfir="$TERRAFORM_DIR" output -raw load_balancer_ip)
-
-# generate a kubeconfig via talosctl
-
-TALOSCONFIG="$(pwd)/talos/talosconfig"
-
 if [[ ! -f "$TALOSCONFIG" ]]; then
-  echo "Error: talosconfig not found at $TALOSCONFIG"
+  echo "Error: talosconfig not found. Set TALOSCONFIG_B64 or place file at talos/talosconfig"
   exit 1
 fi
 
-KUBECONFIG="$(pwd)/kubeconfig"
+# generate a kubeconfig via talosctl
+
+KUBECONFIG="/tmp/kubeconfig"
 talosctl --talosconfig "$TALOSCONFIG" --nodes "$LOADBALANCER_IP" kubeconfig "$KUBECONFIG"
 
 # cluster health check
