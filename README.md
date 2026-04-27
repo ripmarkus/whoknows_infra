@@ -3,6 +3,7 @@
 
 # Talos Infrstructure
 
+This is for devops.
 
 I built a private Kubernetes cluster on Hetzner Cloud. Just raw infrastructure without managed K8s and no public IPs on any of the nodes.
 

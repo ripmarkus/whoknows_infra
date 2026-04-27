@@ -1,6 +1,6 @@
 terraform {
   cloud {
-    organization = "your-org"
+    organization = "ripmarkus"
     workspaces {
       name = "whoknows-infra"
     }

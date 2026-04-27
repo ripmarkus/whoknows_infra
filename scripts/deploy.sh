@@ -11,8 +11,8 @@ NAME="${NAME:-${2:-}}"
 DOMAIN="${DOMAIN:-${3:-}}"
 PORT="${PORT:-${4:-80}}"
 
-if [[ -z "$IMAGE" || -z "$NAME" || -z "$DOMAIN" ]]; then
-  echo "Error: all fields are required (IMAGE, NAME, DOMAIN)"
+if [[ -z "$IMAGE" || -z "$NAME" ]]; then
+  echo "Error: IMAGE and NAME are required"
   exit 1
 fi
 
@@ -78,6 +78,9 @@ spec:
           image: $IMAGE
           ports:
             - containerPort: $PORT
+          env:
+            - name: MONITORING_IP
+              value: "10.244.0.0/16"
 EOF
 
 # service manifest
@@ -87,17 +90,26 @@ apiVersion: v1
 kind: Service
 metadata:
   name: $NAME
+  labels:
+    app: $NAME
 spec:
   selector:
     app: $NAME
   ports:
-    - protocol: TCP
+    - name: http
+      protocol: TCP
       port: $PORT
       targetPort: $PORT
   type: ClusterIP
 EOF
 
 # HTTPRoute Manifest
+
+HTTPROUTE_HOSTNAMES=""
+if [[ -n "$DOMAIN" ]]; then
+  HTTPROUTE_HOSTNAMES="  hostnames:
+    - \"$DOMAIN\""
+fi
 
 kubectl --kubeconfig "$KUBECONFIG" apply -f - <<EOF
 apiVersion: gateway.networking.k8s.io/v1
@@ -107,8 +119,7 @@ metadata:
 spec:
   parentRefs:
     - name: main-gateway
-  hostnames:
-    - "$DOMAIN"
+${HTTPROUTE_HOSTNAMES}
   rules:
     - matches:
         - path:
@@ -119,6 +130,11 @@ spec:
           port: $PORT
 EOF
 
+GATEWAY_IP=$(kubectl --kubeconfig "$KUBECONFIG" get gateway main-gateway -o jsonpath='{.status.addresses[0].value}')
 echo ""
 echo "Deployed $IMAGE as '$NAME'"
-echo "Point DNS: $DOMAIN → $(kubectl --kubeconfig "$KUBECONFIG" get gateway main-gateway -o jsonpath='{.status.addresses[0].value}')"
+if [[ -n "$DOMAIN" ]]; then
+  echo "Point DNS: $DOMAIN → $GATEWAY_IP"
+else
+  echo "App reachable at: http://$GATEWAY_IP"
+fi
