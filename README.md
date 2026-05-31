@@ -1,7 +1,7 @@
 
 > **Work in Progress**
 
-# Talos Infrstructure
+# Talos Infrastructure
 
 This is for devops.
 
